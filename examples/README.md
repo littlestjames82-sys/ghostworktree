@@ -25,7 +25,29 @@
   (default: `ghostworktree` on PATH, falling back to
   `PYTHONPATH=<repo>/src python3 -m ghostworktree`).
 
+  A successful run ends with `Demo done.` and prints, in order, the
+  two checks that matter most:
+
+  ```text
+  OK: marker absent; worktree .env was seeded from .env.example only
+  OK: cleanup refused the dirty worktree by default
+  ```
+
+  The demo is safe to re-run: it works only inside its own temp dir
+  (kept afterwards for inspection, and the path is printed), and it
+  touches no real repo, worktree, or `.env`.
+
 - `sample-state.json` - one registry file in the shipped schema:
   `{"schema": 1, "worktrees": [ {name, repo, path, branch, base,
   port, env_source, created_at} ]}`. The real registry lives at
-  `<repo-parent>/<repo-name>-worktrees/registry.json`.
+  `<repo-parent>/<repo-name>-worktrees/registry.json`. Note what is
+  *not* in a record: no file contents and no env values, ever. Only
+  the env source file *name* (`env_source`, or `null`) is recorded.
+
+## Trying the `--json` form
+
+Every command accepts `--json` for scripting. For example, after a
+`create`, `ghostworktree status <repo> demo-task --json` returns one
+object per tree with `name`, `path`, `branch`, `port`, `status`
+(`clean`, `dirty`, or `missing`), the staged/unstaged/untracked
+counts, and `changed` (the total cleanup would have to account for).

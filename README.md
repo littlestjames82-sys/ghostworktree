@@ -21,6 +21,38 @@ Default location: a sibling of the repo,
 `<repo-parent>/<repo-name>-worktrees/<name>`, recorded in a registry
 at `<repo-parent>/<repo-name>-worktrees/registry.json`.
 
+## Quick start
+
+Prerequisites: Python 3.10 or newer and `git` on `PATH`. There is
+nothing to install from a package index and nothing to configure:
+run the CLI from a source checkout with the module form below.
+
+```sh
+# Short-hand for the module form (skip this if the `ghostworktree`
+# console script is installed, and just call `ghostworktree`):
+gw() { PYTHONPATH=/path/to/ghostworktree/src python3 -m ghostworktree "$@"; }
+
+gw create /path/to/repo fix-parser   # creates <repo-parent>/<repo>-worktrees/fix-parser,
+                                     # branch worktree/fix-parser, a free port
+gw list /path/to/repo                # name, path, branch, port, state
+gw status /path/to/repo fix-parser   # clean, or dirty with per-kind counts
+# ... an agent works in the new tree; commit or discard its work ...
+gw cleanup /path/to/repo fix-parser  # refuses if the tree is dirty (see below)
+```
+
+A successful `create` prints the tree path, branch, base, allocated
+port, and the env source file name, for example:
+
+```text
+created fix-parser: /path/to/repo-worktrees/fix-parser
+  branch: worktree/fix-parser  base: HEAD  port: 4100
+  env: .env.example
+```
+
+Add `--json` to any command for the same information as JSON, for
+scripts. Run `ghostworktree --help` (or
+`ghostworktree <command> --help`) for the full flag list per command.
+
 ## Commands (v0.1, as shipped)
 
 ```sh
@@ -34,6 +66,9 @@ ghostworktree list <repo> [--root <dir>] [--json]
 
 # Status: clean / dirty with staged, unstaged, untracked counts
 ghostworktree status <repo> [<name>] [--root <dir>] [--json]
+
+# Doctor: read-only audit reconciling registry, git, disk, and ports
+ghostworktree doctor <repo> [--root <dir>] [--json]
 
 # Clean up a finished task
 ghostworktree cleanup <repo> <name> [--force] [--delete-branch]
@@ -50,8 +85,36 @@ Defaults: branch `worktree/<name>` created from `HEAD`; ports are the
 lowest free port in 4100-4999 that is neither already registered nor
 currently bound on localhost. An explicitly requested port that is
 already allocated or in use fails the create; nothing is created or
-registered on a failed create. Exit codes: 0 = ok, 1 = refused or
-failed, 2 = could not run (for example, not a git repo).
+registered on a failed create.
+
+### Exit codes
+
+| Code | Meaning | Typical causes |
+| --- | --- | --- |
+| 0 | ok | the command did what it asked |
+| 1 | refused or failed | dirty cleanup without `--force`, duplicate name or port, unknown worktree name, corrupt registry |
+| 2 | could not run | the repo argument is not a git working tree, or `git` is not on `PATH` |
+
+### Common refusals (all are deliberate, nothing is changed)
+
+- `refusing to clean up dirty worktree ...` - the tree holds
+  uncommitted work. Commit it, or re-run with `--force` only if you
+  really want that work discarded. See the dirty cleanup rule below.
+- `worktree name ... is already registered` - names address trees in
+  `list`, `status`, and `cleanup`, so pick a different name or clean
+  up the existing tree first.
+- `port ... is already allocated / in use` - pick another `--port`,
+  or omit it and let the tool allocate the lowest free port.
+- `no free port in range ...` - clean up a finished tree to free its
+  port, or pass a wider `--port-range START-END`.
+- `not a git working tree` (exit 2) - the repo argument must be an
+  existing git checkout, not a plain directory or a bare repo.
+- `registry is corrupt ...` / `registry record ... is missing ...` -
+  the registry is never guessed at or treated as empty. Fix or
+  restore `registry.json`; no trees were touched by the failed run.
+- `status` says `missing` - the tree is registered but not on disk.
+  That is not `clean`; `cleanup` on it just unregisters the record
+  and needs no `--force`, because there is no work on disk to lose.
 
 ## The env rule (non-negotiable)
 
@@ -87,6 +150,31 @@ this tool can have.
 - A registered tree that is missing from disk may be unregistered
   without `--force` (there is no work on disk to lose), and status
   reports such a tree as `missing`, never as clean.
+
+## The doctor audit
+
+`list` and `status` look from the registry outward, so they cannot
+see a worktree the registry has lost. `ghostworktree doctor` reconciles
+all four sources of truth (registry, `git worktree list`, the disk,
+and the managed root) and reports, as problems:
+
+- registered trees that are `missing`, or that git marks `prunable`,
+- git worktrees that are not registered (doctor does not adopt,
+  manage, or remove them; cleanup will not touch them either),
+- directories inside the managed root that are neither registered
+  nor git worktrees (leftovers squatting on a name `create` would
+  refuse),
+- duplicate names or duplicate ports in the registry, a recorded
+  repo that does not match, and a recorded branch that has vanished
+  or drifted from the branch actually checked out.
+
+Doctor is strictly read-only: it never prunes, removes, unregisters,
+or rewrites the registry, and it never reads a real `.env`. A dirty
+tree is a note, not a problem: uncommitted work in progress is
+normal, and doctor never discards it (the dirty cleanup rule below
+still protects it). Exit code is 0 when no problems are found and
+1 when any are; a corrupt registry still fails with a named error,
+exactly as in the other commands.
 
 ## Safety rules in v0.1
 
