@@ -1,5 +1,6 @@
 # GhostWorktree
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/littlestjames82-sys/ghostworktree/actions/workflows/ci.yml/badge.svg)](https://github.com/littlestjames82-sys/ghostworktree/actions/workflows/ci.yml/actions)
 
 Isolated git worktree + port + env-copy manager per agent task.
 
